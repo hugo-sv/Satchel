@@ -19,5 +19,6 @@ jobs:
       - run: python run_bots.py
         working-directory: bots
         env:
-          # One secret per bot in roster.json's password_env field.
-          BOT_EXAMPLE_PASSWORD: ${{ secrets.BOT_EXAMPLE_PASSWORD }}
+          # Matches roster.json's password_env field — all four bots
+          # currently share this one secret.
+          BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
