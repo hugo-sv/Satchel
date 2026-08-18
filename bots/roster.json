@@ -34,5 +34,41 @@
     "email": "bot6@hsv.com",
     "password_env": "BOT_PASSWORD",
     "strategy": "buy_and_sacrifice"
+  },
+  {
+    "name": "bot7",
+    "email": "bot7@hsv.com",
+    "password_env": "BOT_PASSWORD",
+    "strategy": "buy_craft_and_sell"
+  },
+  {
+    "name": "bot8",
+    "email": "bot8@hsv.com",
+    "password_env": "BOT_PASSWORD",
+    "strategy": "buy_craft_and_sell"
+  },
+  {
+    "name": "bot9",
+    "email": "bot9@hsv.com",
+    "password_env": "BOT_PASSWORD",
+    "strategy": "buy_craft_and_sell"
+  },
+  {
+    "name": "bot10",
+    "email": "bot10@hsv.com",
+    "password_env": "BOT_PASSWORD",
+    "strategy": "buy_craft_and_sell"
+  },
+  {
+    "name": "bot11",
+    "email": "bot11@hsv.com",
+    "password_env": "BOT_PASSWORD",
+    "strategy": "buy_craft_and_sell"
+  },
+  {
+    "name": "bot12",
+    "email": "bot12@hsv.com",
+    "password_env": "BOT_PASSWORD",
+    "strategy": "scry_and_sell"
   }
 ]
