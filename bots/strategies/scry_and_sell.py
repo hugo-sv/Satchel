@@ -34,9 +34,18 @@ def decide(state: dict) -> list:
         item_id = target["item_id"]
         sell_qty = target["quantity"] - target["for_sale_quantity"]
 
-        best_sell = market.get(item_id, {}).get("best_sell")
-        price = best_sell["price"] - 1 if best_sell else NO_OFFER_FALLBACK_PRICE
-        price = max(price, MIN_SELL_PRICE)
+        # If it already has an open offer for this item, keep that price
+        # instead of undercutting — otherwise, when its own offer is the
+        # best one, it would shave 1✦ off itself every tick forever.
+        own_existing_offer = next(
+            (o for o in state["own_offers"] if o["is_sell"] and o["item_id"] == item_id), None
+        )
+        if own_existing_offer:
+            price = own_existing_offer["price"]
+        else:
+            best_sell = market.get(item_id, {}).get("best_sell")
+            price = best_sell["price"] - 1 if best_sell else NO_OFFER_FALLBACK_PRICE
+            price = max(price, MIN_SELL_PRICE)
 
         # If there isn't enough money to cover the listing fee on the
         # whole stack, sell as much of it as the fee allows instead of

@@ -6,8 +6,22 @@ import random
 def decide(state: dict) -> list:
     money = state["money"]["money"]
 
+    own_sell_qty_at_price = {}
+    for o in state["own_offers"]:
+        if o["is_sell"]:
+            key = (o["item_id"], o["price"])
+            own_sell_qty_at_price[key] = own_sell_qty_at_price.get(key, 0) + o["quantity"]
+
     candidates = []
-    for item_id, tiers in state["sell_tiers"].items():
+    for item_id, raw_tiers in state["sell_tiers"].items():
+        # Strip out this bot's own listed quantity at each price tier —
+        # never buy its own offers back.
+        tiers = []
+        for tier in raw_tiers:
+            external_qty = tier["quantity"] - own_sell_qty_at_price.get((item_id, tier["price"]), 0)
+            if external_qty > 0:
+                tiers.append({**tier, "quantity": external_qty})
+
         if not tiers:
             continue
         best = tiers[0]
