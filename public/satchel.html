@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Satchel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+</head>
+
+<body>
+  <nav class="nav">
+    <a href="satchel.html">🎒 Satchel</a>
+    <a href="agora.html">🏛️ Agora</a>
+    <a href="grimoire.html">📖 Grimoire</a>
+    <a href="ledger.html">📒 Ledger</a>
+    <span class="spacer"></span>
+    <button id="logout">🚪 Log out</button>
+  </nav>
+
+  <main class="container">
+    <h1>Satchel</h1>
+    <p>Purse: <span id="money" class="money">Loading...</span></p>
+    <label><input type="checkbox" id="include-locked"> Include items and ✦ locked into offers</label>
+    <input type="search" id="search" placeholder="Search for an item...">
+
+    <div id="sections"></div>
+  </main>
+
+  <script type="module">
+    import { supabase, requireSession } from './lib/supabaseClient.js';
+
+    const session = await requireSession();
+    let rows = [];
+    let player = null;
+
+    if (session) {
+      const { data } = await supabase
+        .from('player')
+        .select('money, money_locked')
+        .eq('id', session.user.id)
+        .single();
+      player = data;
+      updateMoney();
+
+      const { data: items } = await supabase
+        .from('player_item')
+        .select('quantity, for_sale_quantity, item(id, name, illustration, is_base, is_tool)')
+        .eq('player_id', session.user.id)
+        .gt('quantity', 0);
+
+      rows = items || [];
+
+      for (const row of rows) {
+        const { data: bestBuy } = await supabase
+          .from('offer')
+          .select('price')
+          .eq('item_id', row.item.id)
+          .eq('is_sell', false)
+          .order('price', { ascending: false })
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        row.bestBuyPrice = bestBuy?.price ?? null;
+      }
+
+      render(rows);
+    }
+
+    function includeLocked() {
+      return document.getElementById('include-locked').checked;
+    }
+
+    function updateMoney() {
+      if (!player) { document.getElementById('money').textContent = '-'; return; }
+      const amount = includeLocked() ? player.money + player.money_locked : player.money;
+      document.getElementById('money').textContent = `${amount}✦`;
+    }
+
+    function renderTable(rowsForGroup) {
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr><th>Item</th><th>Quantity</th><th>Best buy offer</th></tr></thead><tbody></tbody>';
+      const tbody = table.querySelector('tbody');
+      const locked = includeLocked();
+      rowsForGroup.forEach((row) => {
+        const tr = document.createElement('tr');
+        const qty = locked ? row.quantity : row.quantity - row.for_sale_quantity;
+        tr.innerHTML = `<td>${row.item.illustration || '❓'} ${row.item.name}</td><td>${qty}</td><td>${row.bestBuyPrice !== null ? row.bestBuyPrice + '✦' : '-'}</td>`;
+        tbody.appendChild(tr);
+      });
+      return table;
+    }
+
+    function render(list) {
+      const container = document.getElementById('sections');
+      container.innerHTML = '';
+
+      const byName = (a, b) => a.item.name.localeCompare(b.item.name);
+      const groups = [
+        { label: 'Base resources', rows: list.filter((r) => r.item.is_base).sort(byName) },
+        { label: 'Tools', rows: list.filter((r) => r.item.is_tool).sort(byName) },
+        { label: 'Items', rows: list.filter((r) => !r.item.is_base && !r.item.is_tool).sort(byName) },
+      ];
+
+      for (const group of groups) {
+        if (group.rows.length === 0) continue;
+        const heading = document.createElement('h2');
+        heading.textContent = group.label;
+        container.appendChild(heading);
+        container.appendChild(renderTable(group.rows));
+      }
+    }
+
+    document.getElementById('search').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      render(rows.filter((r) => r.item.name.toLowerCase().includes(q)));
+    });
+
+    document.getElementById('include-locked').addEventListener('change', () => {
+      updateMoney();
+      const q = document.getElementById('search').value.toLowerCase();
+      render(rows.filter((r) => r.item.name.toLowerCase().includes(q)));
+    });
+
+    document.getElementById('logout').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = 'login.html';
+    });
+  </script>
+</body>
+
+</html>

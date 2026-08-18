@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>The Alchemists' Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      padding: 8px;
+    }
+    .login-card h1 {
+      text-align: center;
+      border-bottom: none;
+    }
+    .login-card form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+    .login-card button {
+      margin-top: 4px;
+    }
+    #message {
+      text-align: center;
+      color: var(--color-text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <h1>The Alchemists' Guild</h1>
+
+    <h2>Sign in</h2>
+    <form id="signin-form">
+      <input type="email" id="signin-email" placeholder="Email" required>
+      <input type="password" id="signin-password" placeholder="Password" required>
+      <button type="submit" disabled>Sign in</button>
+    </form>
+
+    <h2>Join the Guild</h2>
+    <form id="signup-form">
+      <input type="text" id="signup-username" placeholder="Username" required>
+      <input type="email" id="signup-email" placeholder="Email" required>
+      <input type="password" id="signup-password" placeholder="Password" required>
+      <button type="submit" disabled>Sign up</button>
+    </form>
+
+    <p id="message"></p>
+  </div>
+
+  <script type="module">
+    import { supabase } from './lib/supabaseClient.js';
+
+    const message = document.getElementById('message');
+
+    function wireValidation(form) {
+      const button = form.querySelector('button');
+      const inputs = [...form.querySelectorAll('input')];
+      const update = () => { button.disabled = !inputs.every((i) => i.checkValidity() && i.value.trim() !== ''); };
+      inputs.forEach((i) => i.addEventListener('input', update));
+      update();
+    }
+
+    wireValidation(document.getElementById('signin-form'));
+    wireValidation(document.getElementById('signup-form'));
+
+    document.getElementById('signin-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('signin-email').value;
+      const password = document.getElementById('signin-password').value;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) { message.textContent = error.message; return; }
+      window.location.href = 'satchel.html';
+    });
+
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('signup-username').value;
+      const email = document.getElementById('signup-email').value;
+      const password = document.getElementById('signup-password').value;
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { username } },
+      });
+      if (error) { message.textContent = error.message; return; }
+      message.textContent = "Your name has been entered into the Guild's ledger. Check your inbox to confirm it, then sign in.";
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Agora</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <nav class="nav">
+    <a href="satchel.html">🎒 Satchel</a>
+    <a href="agora.html">🏛️ Agora</a>
+    <a href="grimoire.html">📖 Grimoire</a>
+    <a href="ledger.html">📒 Ledger</a>
+    <span class="spacer"></span>
+    <button id="logout">🚪 Log out</button>
+  </nav>
+
+  <main class="container">
+    <h1>Agora</h1>
+    <p>Purse: <span id="money" class="money">Loading...</span></p>
+
+    <div class="card">
+      <h2 style="margin-top: 0;">Scrying</h2>
+      <p><em>Peer into the smoke and pull forth a random raw resource.</em></p>
+      <div class="action-row">
+        <label>Quantity <input type="number" min="1" value="1" id="scry-qty"></label>
+        <button id="buy-lootbox" data-label="Scry"></button>
+      </div>
+      <div id="scry-log"></div>
+    </div>
+
+    <h2>Standing Orders</h2>
+    <table id="offers-table">
+      <thead><tr><th>Type</th><th>Item</th><th>Price</th><th>Quantity</th><th>Posted</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Items</h2>
+    <input type="search" id="search" placeholder="Search for an item...">
+    <div id="results"></div>
+  </main>
+
+  <script type="module">
+    import { supabase, requireSession } from './lib/supabaseClient.js';
+
+    const session = await requireSession();
+    let items = [];
+    let currentQuery = '';
+    let owned = {};
+    let money = 0;
+    let itemsById = {};
+    const scryLog = [];
+
+    function itemName(id) {
+      const i = itemsById[id];
+      return i ? `${i.illustration || ''} ${i.name}` : id;
+    }
+
+    function renderScryLog() {
+      document.getElementById('scry-log').innerHTML =
+        scryLog.map((entry) => `<div class="recipe-row">${entry}</div>`).join('');
+    }
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+    }
+
+    async function refreshOwned() {
+      const { data } = await supabase
+        .from('player_item')
+        .select('item_id, quantity, for_sale_quantity')
+        .eq('player_id', session.user.id);
+      owned = Object.fromEntries((data || []).map((p) => [p.item_id, p]));
+    }
+
+    async function refreshStandingOrders() {
+      const { data } = await supabase
+        .from('offer')
+        .select('id, is_sell, price, quantity, created_at, item(name, illustration)')
+        .eq('player_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      const tbody = document.querySelector('#offers-table tbody');
+      tbody.innerHTML = '';
+      (data || []).forEach((o) => {
+        const tr = document.createElement('tr');
+        const itemLabel = o.item ? `${o.item.illustration || ''} ${o.item.name}` : '';
+        tr.innerHTML = `<td>${o.is_sell ? 'Sell' : 'Buy'}</td><td>${itemLabel}</td><td>${o.price}✦</td><td>${o.quantity}</td><td>${formatDate(o.created_at)}</td><td><button data-cancel="${o.id}">Cancel</button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function refreshMoney() {
+      const { data: player } = await supabase
+        .from('player')
+        .select('money')
+        .eq('id', session.user.id)
+        .single();
+      money = player ? player.money : 0;
+      document.getElementById('money').textContent = player ? `${player.money}✦` : '-';
+    }
+
+    // Best price, quantity summed across every offer tied at that
+    // price. accept_buy_offer/accept_sell_offer take the item (not a
+    // specific offer) and fill across as many tied offers as needed.
+    async function bestOfferSummary(itemId, isSell) {
+      const { data } = await supabase
+        .from('offer')
+        .select('id, price, quantity')
+        .eq('item_id', itemId)
+        .eq('is_sell', isSell)
+        .order('price', { ascending: isSell })
+        .order('created_at', { ascending: true });
+
+      if (!data || data.length === 0) return null;
+
+      const bestPrice = data[0].price;
+      const totalQuantity = data
+        .filter((o) => o.price === bestPrice)
+        .reduce((sum, o) => sum + o.quantity, 0);
+
+      return { id: data[0].id, price: bestPrice, quantity: totalQuantity };
+    }
+
+    async function loadItemDetails(item) {
+      const [bestSell, bestBuy] = await Promise.all([
+        bestOfferSummary(item.id, true),
+        bestOfferSummary(item.id, false),
+      ]);
+      return { item, bestSell, bestBuy };
+    }
+
+    async function render(list) {
+      const container = document.getElementById('results');
+      container.innerHTML = 'Loading...';
+
+      // Fetch every item's offers concurrently instead of one at a time —
+      // with a couple dozen items, sequential awaits made every refresh
+      // (including a full page reload) noticeably slow.
+      const details = await Promise.all(list.map(loadItemDetails));
+
+      container.innerHTML = '';
+      for (const { item, bestSell, bestBuy } of details) {
+        const block = document.createElement('div');
+        block.className = 'card';
+        block.dataset.itemId = item.id;
+        block.innerHTML = `
+          <h3>${item.illustration || ''} ${item.name} <span class="hint">(x${owned[item.id]?.quantity ?? 0})</span></h3>
+          <div class="order-book">
+            <div class="order-book-side bid" data-price="${bestBuy ? bestBuy.price : 0}">
+              <div class="order-book-label">Sell here ${bestBuy ? `<span class="hint">(${bestBuy.quantity})</span>` : ''}</div>
+              ${bestBuy ? `
+                <div class="order-book-price">${bestBuy.price}✦</div>
+                <input type="number" min="1" max="${bestBuy.quantity}" value="1" class="accept-qty">
+                <button data-action="accept-buy" data-item="${item.id}" data-label="Sell">Sell</button>
+              ` : '<div class="order-book-qty">no offers</div>'}
+            </div>
+            <div class="order-book-side ask" data-price="${bestSell ? bestSell.price : 0}">
+              <div class="order-book-label">Buy here ${bestSell ? `<span class="hint">(${bestSell.quantity})</span>` : ''}</div>
+              ${bestSell ? `
+                <div class="order-book-price">${bestSell.price}✦</div>
+                <input type="number" min="1" max="${bestSell.quantity}" value="1" class="accept-qty">
+                <button data-action="accept-sell" data-item="${item.id}" data-label="Buy">Buy</button>
+              ` : '<div class="order-book-qty">no offers</div>'}
+            </div>
+          </div>
+          <details>
+            <summary>Post an offer</summary>
+            <div class="action-row centered">
+              <label>Quantity <input type="number" min="1" value="1" class="qty"></label>
+              <label>Unit price (✦) <input type="number" min="0" step="1" value="1" class="price"></label>
+            </div>
+            <div class="action-row centered">
+              <span>Total price: <span class="total">0</span>✦</span>
+              <span>Tax to pay: <span class="fee">0</span>✦</span>
+            </div>
+            <div class="action-row centered">
+              <button data-action="post-buy" data-item="${item.id}">Offer to buy</button>
+              <button data-action="post-sell" data-item="${item.id}">Offer to sell</button>
+            </div>
+          </details>
+        `;
+        container.appendChild(block);
+        updateTotals(block.querySelector('details'), item.id);
+
+        if (bestBuy) updateAcceptSide(block.querySelector('.order-book-side.bid'), bestBuy.quantity);
+        if (bestSell) updateAcceptSide(block.querySelector('.order-book-side.ask'), bestSell.quantity);
+      }
+    }
+
+    function updateAcceptSide(sideEl, maxQty) {
+      const qtyInput = sideEl.querySelector('.accept-qty');
+      const btn = sideEl.querySelector('button[data-action]');
+      const qty = Number(qtyInput.value) || 0;
+      btn.disabled = !(qty > 0 && qty <= maxQty);
+      const price = Number(sideEl.dataset.price) || 0;
+      btn.textContent = `${btn.dataset.label} (${qty * price}✦)`;
+    }
+
+    function updateTotals(details, itemId) {
+      const qty = Number(details.querySelector('.qty').value) || 0;
+      const price = Number(details.querySelector('.price').value) || 0;
+      const total = qty * price;
+      const fee = Math.ceil(total * 0.05);
+      details.querySelector('.total').textContent = total;
+      details.querySelector('.fee').textContent = fee;
+
+      const postBuyBtn = details.querySelector('button[data-action="post-buy"]');
+      const postSellBtn = details.querySelector('button[data-action="post-sell"]');
+      const valid = qty > 0 && price >= 0;
+
+      postBuyBtn.disabled = !(valid && total + fee <= money);
+
+      const available = (owned[itemId]?.quantity ?? 0) - (owned[itemId]?.for_sale_quantity ?? 0);
+      postSellBtn.disabled = !(valid && qty <= available && fee <= money);
+    }
+
+    function applyFilter() {
+      return items.filter((i) => i.name.toLowerCase().includes(currentQuery));
+    }
+
+    async function refreshAll() {
+      await Promise.all([refreshMoney(), refreshOwned(), refreshStandingOrders()]);
+      await render(applyFilter());
+      updateScryButton();
+    }
+
+    function updateScryButton() {
+      const qty = Number(document.getElementById('scry-qty').value) || 0;
+      const btn = document.getElementById('buy-lootbox');
+      btn.disabled = !(qty > 0 && qty * 10 <= money);
+      btn.textContent = `${btn.dataset.label} (${qty * 10}✦)`;
+    }
+
+    if (session) {
+      const { data } = await supabase.from('item').select('id, name, illustration').order('name');
+      items = data || [];
+      itemsById = Object.fromEntries(items.map((i) => [i.id, i]));
+
+      const params = new URLSearchParams(window.location.search);
+      currentQuery = (params.get('q') || '').toLowerCase();
+      document.getElementById('search').value = currentQuery;
+      await refreshAll();
+    }
+
+    document.getElementById('search').addEventListener('input', async (e) => {
+      currentQuery = e.target.value.toLowerCase();
+      await render(applyFilter());
+    });
+
+    document.getElementById('results').addEventListener('input', (e) => {
+      if (e.target.matches('.qty, .price')) {
+        const details = e.target.closest('details');
+        const itemId = e.target.closest('.card').dataset.itemId;
+        updateTotals(details, itemId);
+      } else if (e.target.matches('.accept-qty')) {
+        const sideEl = e.target.closest('.order-book-side');
+        updateAcceptSide(sideEl, Number(e.target.max));
+      }
+    });
+
+    document.getElementById('results').addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+
+      try {
+        if (action === 'accept-sell' || action === 'accept-buy') {
+          const qty = Number(btn.closest('.order-book-side').querySelector('.accept-qty').value);
+          const fn = action === 'accept-sell' ? 'accept_sell_offer' : 'accept_buy_offer';
+          await callRpc(fn, { p_item_id: btn.dataset.item, p_qty: qty });
+        } else if (action === 'post-buy' || action === 'post-sell') {
+          const wrapper = btn.closest('details');
+          const qty = Number(wrapper.querySelector('.qty').value);
+          const price = Math.round(Number(wrapper.querySelector('.price').value));
+          const fn = action === 'post-buy' ? 'post_buy_offer' : 'post_sell_offer';
+          await callRpc(fn, { p_item_id: btn.dataset.item, p_qty: qty, p_price: price });
+        }
+        await refreshAll();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    async function callRpc(name, args) {
+      const { error } = await supabase.rpc(name, args);
+      if (error) throw error;
+    }
+
+    document.getElementById('logout').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = 'login.html';
+    });
+
+    document.getElementById('buy-lootbox').addEventListener('click', async () => {
+      const qty = Number(document.getElementById('scry-qty').value);
+      const { data, error } = await supabase.rpc('buy_lootbox', { p_qty: qty });
+      if (error) { alert(error.message); return; }
+      const counts = {};
+      (data || []).forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+      const summary = Object.entries(counts).map(([id, n]) => `${n}x ${itemName(id)}`).join(' + ');
+      scryLog.unshift(`Got ${summary}`);
+      renderScryLog();
+      await refreshAll();
+    });
+
+    document.getElementById('scry-qty').addEventListener('input', updateScryButton);
+
+    document.querySelector('#offers-table tbody').addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-cancel]');
+      if (!btn) return;
+      const { error } = await supabase.rpc('cancel_offer', { p_offer_id: btn.dataset.cancel });
+      if (error) { alert(error.message); return; }
+      await refreshAll();
+    });
+  </script>
+</body>
+</html>

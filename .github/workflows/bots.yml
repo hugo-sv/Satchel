@@ -1,0 +1,23 @@
+name: Run bots
+
+on:
+  schedule:
+    # Every 15 minutes. Loose on purpose — bots don't need real-time
+    # precision. Adjust once real strategies exist.
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  run-bots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r bots/requirements.txt
+      - run: python run_bots.py
+        working-directory: bots
+        env:
+          # One secret per bot in roster.json's password_env field.
+          BOT_EXAMPLE_PASSWORD: ${{ secrets.BOT_EXAMPLE_PASSWORD }}

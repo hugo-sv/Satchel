@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Grimoire</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+</head>
+
+<body>
+  <nav class="nav">
+    <a href="satchel.html">🎒 Satchel</a>
+    <a href="agora.html">🏛️ Agora</a>
+    <a href="grimoire.html">📖 Grimoire</a>
+    <a href="ledger.html">📒 Ledger</a>
+    <span class="spacer"></span>
+    <button id="logout">🚪 Log out</button>
+  </nav>
+
+  <main class="container">
+    <h1>Grimoire</h1>
+
+    <div class="card">
+      <h2 style="margin-top: 0;">Sacrifice</h2>
+      <p><em>Offer an item to the gods for ✦. They reward you less for what's been sacrificed recently.</em></p>
+      <div class="action-row">
+        <label>Item <select id="sacrifice-item"></select></label>
+        <button id="sacrifice-btn">Sacrifice 1 unit</button>
+      </div>
+      <div id="sacrifice-log"></div>
+    </div>
+
+    <h2>Recipes</h2>
+    <div class="action-row">
+      <label><input type="checkbox" id="hide-owned"> Hide recipes I already have the yield for</label>
+      <label><input type="checkbox" id="hide-unavailable"> Hide recipes I can't craft yet</label>
+    </div>
+
+    <div id="recipes">Loading...</div>
+  </main>
+
+  <script type="module">
+    import { supabase, requireSession } from './lib/supabaseClient.js';
+
+    const session = await requireSession();
+    let available = {};
+    let sacrificeable = [];
+    const sacrificeLog = [];
+
+    async function bestSellPrice(itemId) {
+      const { data } = await supabase
+        .from('offer')
+        .select('price')
+        .eq('item_id', itemId)
+        .eq('is_sell', true)
+        .order('price', { ascending: true })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      return data?.price ?? null;
+    }
+
+    async function bestBuyPrice(itemId) {
+      const { data } = await supabase
+        .from('offer')
+        .select('price')
+        .eq('item_id', itemId)
+        .eq('is_sell', false)
+        .order('price', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      return data?.price ?? null;
+    }
+
+    function itemLabel(item, price) {
+      const priceLabel = price === null ? 'no offers' : `${price}✦`;
+      return `${item.illustration || ''} ${item.name} (${priceLabel})`;
+    }
+
+    function inputLabel(item, hasEnough, price) {
+      const name = `${item.illustration || ''} ${item.name}`;
+      if (hasEnough) return name;
+      const priceLabel = price === null ? 'no offers' : `${price}✦`;
+      return `${name} (${priceLabel})`;
+    }
+
+    function renderSacrificeLog() {
+      document.getElementById('sacrifice-log').innerHTML =
+        sacrificeLog.map((entry) => `<div class="recipe-row">${entry}</div>`).join('');
+    }
+
+    const sacrificeSelect = document.getElementById('sacrifice-item');
+    const sacrificeBtn = document.getElementById('sacrifice-btn');
+
+    function updateSacrificeButton() {
+      const selected = sacrificeable.find((i) => i.id === sacrificeSelect.value);
+      sacrificeBtn.disabled = !selected;
+    }
+    sacrificeSelect.addEventListener('change', updateSacrificeButton);
+
+    async function refreshPlayerItems() {
+      const { data: playerItems } = await supabase
+        .from('player_item')
+        .select('item_id, quantity, for_sale_quantity, item(id, name, illustration)')
+        .eq('player_id', session.user.id);
+
+      available = Object.fromEntries(
+        (playerItems || []).map((p) => [p.item_id, p.quantity - p.for_sale_quantity])
+      );
+
+      sacrificeable = (playerItems || [])
+        .filter((p) => p.quantity - p.for_sale_quantity > 0)
+        .map((p) => ({ id: p.item.id, name: p.item.name, illustration: p.item.illustration, available: p.quantity - p.for_sale_quantity }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      sacrificeSelect.innerHTML = sacrificeable
+        .map((i) => `<option value="${i.id}">${i.illustration || ''} ${i.name} (x${i.available})</option>`)
+        .join('');
+
+      updateSacrificeButton();
+    }
+
+    let recipeEntries = [];
+
+    async function refreshRecipes() {
+      const { data: recipes } = await supabase.from('recipe').select('id, name').order('name');
+
+      const entries = [];
+      for (const recipe of recipes || []) {
+        const { data: recipeItems } = await supabase
+          .from('recipe_item')
+          .select('quantity, is_output, item(id, name, illustration)')
+          .eq('recipe_id', recipe.id);
+
+        const byName = (a, b) => a.item.name.localeCompare(b.item.name);
+        const inputs = (recipeItems || []).filter((r) => !r.is_output).sort(byName);
+        const outputs = (recipeItems || []).filter((r) => r.is_output).sort(byName);
+        const possible = inputs.every((i) => (available[i.item.id] ?? 0) >= i.quantity);
+
+        // Tools are consumed then returned by the same recipe (same item
+        // on both sides) — shown in the title instead of double-listed
+        // as both an ingredient and a yield.
+        const toolInputs = inputs.filter((i) => outputs.some((o) => o.item.id === i.item.id));
+        const trueInputs = inputs.filter((i) => !outputs.some((o) => o.item.id === i.item.id));
+        const trueOutputs = outputs.filter((o) => !inputs.some((i) => i.item.id === o.item.id));
+
+        // Whether the player already holds every true output of this
+        // recipe — feeds the "hide already possessed yield" filter.
+        const alreadyOwnsOutputs = trueOutputs.length > 0 && trueOutputs.every((o) => (available[o.item.id] ?? 0) > 0);
+
+        const toolLabels = await Promise.all(
+          toolInputs.map(async (i) => {
+            const hasEnough = (available[i.item.id] ?? 0) >= i.quantity;
+            const price = hasEnough ? null : await bestSellPrice(i.item.id);
+            return inputLabel(i.item, hasEnough, price);
+          })
+        );
+        const inputLabels = await Promise.all(
+          trueInputs.map(async (i) => {
+            const hasEnough = (available[i.item.id] ?? 0) >= i.quantity;
+            const price = hasEnough ? null : await bestSellPrice(i.item.id);
+            return `${i.quantity}x ${inputLabel(i.item, hasEnough, price)}`;
+          })
+        );
+        const outputLabels = await Promise.all(
+          trueOutputs.map(async (o) => `${o.quantity}x ${itemLabel(o.item, await bestBuyPrice(o.item.id))}`)
+        );
+
+        entries.push({ recipe, inputs, inputLabels, outputLabels, toolLabels, possible, alreadyOwnsOutputs });
+      }
+
+      recipeEntries = entries;
+      renderRecipes();
+    }
+
+    function renderRecipes() {
+      const container = document.getElementById('recipes');
+      const hideOwned = document.getElementById('hide-owned').checked;
+      const hideUnavailable = document.getElementById('hide-unavailable').checked;
+
+      const entries = recipeEntries.filter((entry) => {
+        if (hideOwned && entry.alreadyOwnsOutputs) return false;
+        if (hideUnavailable && !entry.possible) return false;
+        return true;
+      });
+
+      container.innerHTML = '';
+      for (const entry of entries) {
+        const block = document.createElement('div');
+        block.className = 'card';
+        const toolsText = entry.toolLabels.length ? ` using ${entry.toolLabels.join(', ')}` : '';
+        block.innerHTML = `
+          <h3>${entry.recipe.name}${toolsText}</h3>
+          <div class="recipe-columns">
+            <div>
+              <div class="recipe-column-label">Ingredients</div>
+              ${entry.inputLabels.map((l) => `<div class="recipe-row">${l}</div>`).join('')}
+            </div>
+            <div>
+              <div class="recipe-column-label">Yield</div>
+              ${entry.outputLabels.map((l) => `<div class="recipe-row">${l}</div>`).join('')}
+            </div>
+          </div>
+          <div class="recipe-craft-controls">
+            <label>Quantity <input type="number" min="1" value="1" class="qty"></label>
+            <button data-recipe="${entry.recipe.id}">Craft</button>
+          </div>
+        `;
+        container.appendChild(block);
+
+        const qtyInput = block.querySelector('.qty');
+        const craftBtn = block.querySelector('button[data-recipe]');
+        const updateCraftable = () => {
+          const n = Number(qtyInput.value) || 0;
+          craftBtn.disabled = !(n > 0 && entry.inputs.every((i) => (available[i.item.id] ?? 0) >= i.quantity * n));
+        };
+        qtyInput.addEventListener('input', updateCraftable);
+        updateCraftable();
+      }
+    }
+
+    async function refreshAll() {
+      await refreshPlayerItems();
+      await refreshRecipes();
+    }
+
+    if (session) {
+      await refreshAll();
+
+      document.getElementById('hide-owned').addEventListener('change', renderRecipes);
+      document.getElementById('hide-unavailable').addEventListener('change', renderRecipes);
+
+      sacrificeBtn.addEventListener('click', async () => {
+        const selected = sacrificeable.find((i) => i.id === sacrificeSelect.value);
+        const { data, error } = await supabase.rpc('sacrifice_item', {
+          p_item_id: sacrificeSelect.value,
+        });
+        if (error) { alert(error.message); return; }
+        sacrificeLog.unshift(`Sacrificed ${selected ? `${selected.illustration || ''} ${selected.name}` : ''}, received ${data}✦`);
+        renderSacrificeLog();
+        await refreshAll();
+      });
+
+      document.getElementById('recipes').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-recipe]');
+        if (!btn) return;
+        const qty = Number(btn.parentElement.querySelector('.qty').value);
+        const { error } = await supabase.rpc('craft', { p_recipe_id: btn.dataset.recipe, p_qty: qty });
+        if (error) { alert(error.message); return; }
+        await refreshAll();
+      });
+    }
+
+    document.getElementById('logout').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = 'login.html';
+    });
+  </script>
+</body>
+
+</html>

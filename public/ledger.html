@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+</head>
+
+<body>
+  <nav class="nav">
+    <a href="satchel.html">🎒 Satchel</a>
+    <a href="agora.html">🏛️ Agora</a>
+    <a href="grimoire.html">📖 Grimoire</a>
+    <a href="ledger.html">📒 Ledger</a>
+    <span class="spacer"></span>
+    <button id="logout">🚪 Log out</button>
+  </nav>
+
+  <main class="container">
+    <h1>Ledger</h1>
+
+    <table id="activity-table">
+      <thead>
+        <tr>
+          <th>Detail</th>
+          <th>When</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script type="module">
+    import { supabase, requireSession } from './lib/supabaseClient.js';
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+    }
+
+    const session = await requireSession();
+
+    if (session) {
+      const { data: items } = await supabase.from('item').select('id, name');
+      const itemsById = Object.fromEntries((items || []).map((i) => [i.id, i.name]));
+
+      function itemName(id) {
+        return itemsById[id] ?? id;
+      }
+
+      const { data: recipes } = await supabase.from('recipe').select('id, name');
+      const recipesById = Object.fromEntries((recipes || []).map((r) => [r.id, r.name]));
+
+      function recipeName(id) {
+        return recipesById[id] ?? id;
+      }
+
+      function formatActivity(row) {
+        const d = row.detail;
+        switch (row.type) {
+          case 'craft': return `Crafted "${recipeName(d.recipe_id)}": ${(d.outputs || []).map((o) => `${o.quantity}x ${itemName(o.item_id)}`).join(' + ')}`;
+          // One row per trade, shared by both sides.
+          case 'trade': {
+            const iWasBuyer = row.buyer_id === session.user.id;
+            return iWasBuyer
+              ? `Bought ${d.quantity}x ${itemName(d.item_id)} for ${d.total}✦`
+              : `Sold ${d.quantity}x ${itemName(d.item_id)} for ${d.total}✦`;
+          }
+          case 'income': return `Received ${d.amount}✦ from the guild`;
+          case 'sacrifice': return `Sacrificed ${itemName(d.item_id)}, received ${d.payout}✦`;
+          case 'post_buy_offer': return `Posted buy offer: ${d.quantity}x ${itemName(d.item_id)} at ${d.price}✦ (tax: ${d.fee}✦)`;
+          case 'post_sell_offer': return `Posted sell offer: ${d.quantity}x ${itemName(d.item_id)} at ${d.price}✦ (tax: ${d.fee}✦)`;
+          case 'lootbox': {
+            const counts = {};
+            (d.items || []).forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+            const summary = Object.entries(counts).map(([id, n]) => `${n}x ${itemName(id)}`).join(' + ');
+            return `Scried ${d.qty}x for ${d.total}✦, got ${summary}`;
+          }
+          default: return JSON.stringify(d);
+        }
+      }
+
+      const { data: activity } = await supabase
+        .from('activity')
+        .select('type, detail, created_at, buyer_id, seller_id')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      const tbody = document.querySelector('#activity-table tbody');
+      (activity || []).forEach((a) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${formatActivity(a)}</td><td>${formatDate(a.created_at)}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('logout').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = 'login.html';
+    });
+  </script>
+</body>
+
+</html>

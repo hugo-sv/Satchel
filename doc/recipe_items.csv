@@ -1,0 +1,34 @@
+Recipe Name,Item Name,Quantity,Is_output
+Mortar & Pestle Crafting,Quartz Dust,6,false
+Mortar & Pestle Crafting,Sunroot,4,false
+Mortar & Pestle Crafting,Charcoal,3,false
+Mortar & Pestle Crafting,Mortar & Pestle,1,true
+Alembic Crafting,Glass Sand,8,false
+Alembic Crafting,Sulfur,5,false
+Alembic Crafting,Charcoal,4,false
+Alembic Crafting,Alembic,1,true
+Grinding,Moonleaf,5,false
+Grinding,Sunroot,3,false
+Grinding,Mortar & Pestle,1,false
+Grinding,Mortar & Pestle,1,true
+Grinding,Crushed Herb Powder,6,true
+Purification,Spring Water,5,false
+Purification,Quartz Dust,3,false
+Purification,Alembic,1,false
+Purification,Alembic,1,true
+Purification,Purified Water,2,true
+Purification,Quartz Residue,2,true
+Catalyzing,Sulfur,5,false
+Catalyzing,Charcoal,3,false
+Catalyzing,Catalyst Powder,2,true
+Distillation,Crushed Herb Powder,4,false
+Distillation,Purified Water,2,false
+Distillation,Alembic,1,false
+Distillation,Alembic,1,true
+Distillation,Herbal Extract,1,true
+Transmutation,Herbal Extract,1,false
+Transmutation,Catalyst Powder,2,false
+Transmutation,Quartz Residue,2,false
+Transmutation,Mortar & Pestle,1,false
+Transmutation,Mortar & Pestle,1,true
+Transmutation,Philosopher's Stone,1,true
