@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Satchel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -82,6 +83,8 @@
     }
 
     function renderTable(rowsForGroup) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-scroll';
       const table = document.createElement('table');
       table.innerHTML = '<thead><tr><th>Item</th><th>Quantity</th><th>Best buy offer</th></tr></thead><tbody></tbody>';
       const tbody = table.querySelector('tbody');
@@ -92,7 +95,8 @@
         tr.innerHTML = `<td>${row.item.illustration || '❓'} ${row.item.name}</td><td>${qty}</td><td>${row.bestBuyPrice !== null ? row.bestBuyPrice + '✦' : '-'}</td>`;
         tbody.appendChild(tr);
       });
-      return table;
+      wrapper.appendChild(table);
+      return wrapper;
     }
 
     function render(list) {

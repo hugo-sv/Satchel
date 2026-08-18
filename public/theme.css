@@ -272,6 +272,7 @@ label:has(input[type="checkbox"]) {
    mismatch without this). */
 .action-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-top: 8px;
@@ -283,13 +284,21 @@ label:has(input[type="checkbox"]) {
 
 .recipe-craft-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 12px;
   margin-top: 14px;
 }
 
-/* Tables */
+/* Tables: wrap in <div class="table-scroll"> so a wide table (lots of
+   columns) scrolls horizontally on a narrow screen instead of
+   overflowing the whole page. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -342,4 +351,52 @@ summary {
 
 .error-text {
   color: var(--color-red-bright);
+}
+
+/* Phone screens: stack what's normally side-by-side, tighten spacing,
+   and let selects/inputs shrink instead of forcing horizontal scroll. */
+@media (max-width: 600px) {
+  body {
+    font-size: 16px;
+  }
+
+  .container {
+    padding: 16px 12px 48px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  .nav {
+    padding: 8px 12px;
+  }
+
+  .nav a {
+    padding: 8px 10px;
+  }
+
+  .card {
+    padding: 14px 14px;
+  }
+
+  .order-book,
+  .recipe-columns {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  label {
+    margin-right: 0;
+    width: 100%;
+  }
+
+  label input, label select {
+    width: 100%;
+  }
+
+  th, td {
+    padding: 6px 8px;
+    font-size: 0.9rem;
+  }
 }

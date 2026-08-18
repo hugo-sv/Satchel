@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ledger</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,15 +24,17 @@
   <main class="container">
     <h1>Ledger</h1>
 
-    <table id="activity-table">
-      <thead>
-        <tr>
-          <th>Detail</th>
-          <th>When</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="table-scroll">
+      <table id="activity-table">
+        <thead>
+          <tr>
+            <th>Detail</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </main>
 
   <script type="module">
