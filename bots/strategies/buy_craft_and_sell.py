@@ -6,21 +6,21 @@ import random
 def decide(state: dict) -> list:
     money = state["money"]["money"]
     market = state["market"]
-    inventory = {row["item_id"]: row["quantity"] - row["for_sale_quantity"] for row in state["inventory"]}
 
     eligible = []
     for recipe in state["recipes"]:
-        if not recipe["outputs"]:
-            continue
-        # Tools are borrowed then returned by the craft itself — must
-        # already be owned, never bought fresh for a single use.
-        if any(inventory.get(t["item_id"], 0) < t["quantity"] for t in recipe["tools"]):
+        # Tools aren't special-cased — bought fresh like any other
+        # ingredient if not affordable, and just as eligible to be the
+        # thing sold afterward as a true output.
+        needed = recipe["inputs"] + recipe["tools"]
+        produced = recipe["outputs"] + recipe["tools"]
+        if not produced:
             continue
 
         total_cost = 0
         buys = []
         affordable = True
-        for i in recipe["inputs"]:
+        for i in needed:
             offer = market.get(i["item_id"], {}).get("best_sell")
             if not offer or offer["quantity"] < i["quantity"]:
                 affordable = False
@@ -29,13 +29,13 @@ def decide(state: dict) -> list:
             buys.append({"rpc": "accept_sell_offer", "args": {"item_id": i["item_id"], "qty": i["quantity"]}})
 
         if affordable and total_cost <= money:
-            eligible.append((recipe, buys, total_cost))
+            eligible.append((recipe, buys, total_cost, produced))
 
     if not eligible:
         return []
 
-    recipe, buys, total_cost = random.choice(eligible)
-    output = recipe["outputs"][0]
+    recipe, buys, total_cost, produced = random.choice(eligible)
+    output = produced[0]
     output_offer = market.get(output["item_id"], {}).get("best_sell")
     price = output_offer["price"] - 1 if output_offer else total_cost + 20
 
