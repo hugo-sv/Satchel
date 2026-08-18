@@ -66,7 +66,7 @@ class BotSession:
         return rows.data or []
 
     def items(self) -> list[dict]:
-        rows = self.client.table("item").select("id, name, illustration, weight, is_base, is_tool").order("name").execute()
+        rows = self.client.table("item").select("id, name, illustration, weight, is_base, is_tool, cost").order("name").execute()
         return rows.data or []
 
     def recipes(self) -> list[dict]:
@@ -164,7 +164,7 @@ class BotSession:
     def own_offers(self) -> list[dict]:
         rows = (
             self.client.table("offer")
-            .select("id, is_sell, price, quantity, created_at, item(name, illustration)")
+            .select("id, item_id, is_sell, price, quantity, created_at, item(name, illustration)")
             .eq("player_id", self.player_id)
             .order("created_at", desc=True)
             .execute()

@@ -52,7 +52,8 @@ create policy recipe_item_select_all on recipe_item for select using (true);
 -- Column-level grant, not the whole table: destruction_pot must stay
 -- hidden from clients (RLS only controls row visibility, not column
 -- visibility) so nobody can scout the best sacrifice payout in advance.
-grant select (id, name, illustration, weight, is_base, is_tool) on item to anon, authenticated;
+-- cost is a static, purely-derived reference value, safe to expose.
+grant select (id, name, illustration, weight, is_base, is_tool, cost) on item to anon, authenticated;
 grant select on recipe to anon, authenticated;
 grant select on recipe_item to anon, authenticated;
 

@@ -23,7 +23,8 @@ create table item (
   destruction_pot integer not null default 0,
   weight integer not null default 1 check (weight >= 0), -- lootbox drop weight; 0 = never drops
   is_base boolean not null default false, -- raw resource; Satchel groups these separately
-  is_tool boolean not null default false -- reusable tool (consumed then returned by a recipe); Satchel groups these separately
+  is_tool boolean not null default false, -- reusable tool (consumed then returned by a recipe); Satchel groups these separately
+  cost numeric not null default 0 -- base-resource units to get one, recursively through the crafting tree (tools excluded); see 07_seed_crafting_tree.sql
 );
 
 -- Player_Item (inventory)

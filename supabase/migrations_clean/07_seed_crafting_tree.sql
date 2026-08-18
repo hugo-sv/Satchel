@@ -14,23 +14,27 @@
 -- row and an output row of the same recipe (consumed then returned) —
 -- recipe_item's primary key includes is_output, so that's just two
 -- distinct rows, not a conflict.
+--
+-- `cost`: base-resource units to make one, recursively through the
+-- recipes below (tools excluded, divided by the recipe's total output
+-- quantity) — see 20260819030000_item_cost.sql for the per-item math.
 
-insert into item (name, weight, is_base, illustration) values
-  ('Spring Water', 1, true, '🪣'),
-  ('Moonleaf', 1, true, '🌙'),
-  ('Sunroot', 1, true, '🌱'),
-  ('Quartz Dust', 1, true, '✨'),
-  ('Sulfur', 1, true, '🟡'),
-  ('Glass Sand', 1, true, '⏳'),
-  ('Charcoal', 1, true, '⬛'),
-  ('Mortar & Pestle', 0, false, '🥣'),
-  ('Alembic', 0, false, '⚗️'),
-  ('Crushed Herb Powder', 0, false, '🌿'),
-  ('Purified Water', 0, false, '💧'),
-  ('Quartz Residue', 0, false, '⚪'),
-  ('Herbal Extract', 0, false, '🫙'),
-  ('Catalyst Powder', 0, false, '🧂'),
-  ('Philosopher''s Stone', 0, false, '💎');
+insert into item (name, weight, is_base, illustration, cost) values
+  ('Spring Water', 1, true, '🪣', 1),
+  ('Moonleaf', 1, true, '🌙', 1),
+  ('Sunroot', 1, true, '🌱', 1),
+  ('Quartz Dust', 1, true, '✨', 1),
+  ('Sulfur', 1, true, '🟡', 1),
+  ('Glass Sand', 1, true, '⏳', 1),
+  ('Charcoal', 1, true, '⬛', 1),
+  ('Mortar & Pestle', 0, false, '🥣', 13),
+  ('Alembic', 0, false, '⚗️', 17),
+  ('Crushed Herb Powder', 0, false, '🌿', 1.333333),
+  ('Purified Water', 0, false, '💧', 2),
+  ('Quartz Residue', 0, false, '⚪', 2),
+  ('Herbal Extract', 0, false, '🫙', 9.333333),
+  ('Catalyst Powder', 0, false, '🧂', 4),
+  ('Philosopher''s Stone', 0, false, '💎', 21.333333);
 
 insert into recipe (name) values
   ('Mortar & Pestle Crafting'),
