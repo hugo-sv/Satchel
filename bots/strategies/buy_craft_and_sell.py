@@ -34,7 +34,10 @@ def decide(state: dict) -> list:
     if not eligible:
         return []
 
-    recipe, buys, total_cost, produced = random.choice(eligible)
+    # A recipe whose output has no sell offer at all has no market price
+    # to compare against, so it's prioritized over ones that do.
+    unpriced = [e for e in eligible if not market.get(e[3][0]["item_id"], {}).get("best_sell")]
+    recipe, buys, total_cost, produced = random.choice(unpriced) if unpriced else random.choice(eligible)
     output = produced[0]
     output_offer = market.get(output["item_id"], {}).get("best_sell")
     price = output_offer["price"] - 1 if output_offer else total_cost + 20
